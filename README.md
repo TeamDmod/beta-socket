@@ -83,4 +83,4 @@ GUILD_MEMBER_UPDATE ->
 - [ ] Authentication process
 - [ ] Setup a stable discord gateway connection.
 
-©copyright 2021 dmod and puppet
+©copyright 2021 dmod

@@ -1,0 +1,21 @@
+{
+  "name": "beta-socket",
+  "version": "1.0.0",
+  "description": "Beta socket connection for Dmod. Connection will feed back live data for guild view and updates.",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node .",
+    "dev": "nodemon . --watch dist",
+    "watch": "tsc --watch",
+    "build": "tsc --build"
+  },
+  "repository": "https://github.com/dmod-gg/beta-socket.git",
+  "author": "Wilbert-mad",
+  "private": true,
+  "dependencies": {
+    "ws": "^7.5.3"
+  },
+  "devDependencies": {
+    "@types/ws": "^7.4.7"
+  }
+}
