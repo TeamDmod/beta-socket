@@ -13,9 +13,11 @@
   "author": "Wilbert-mad",
   "private": true,
   "dependencies": {
+    "node-fetch": "^2.6.1",
     "ws": "^7.5.3"
   },
   "devDependencies": {
+    "@types/node-fetch": "^2.5.12",
     "@types/ws": "^7.4.7"
   }
 }

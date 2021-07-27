@@ -24,8 +24,9 @@ export default class connection {
     this._init();
   }
 
-  private _init() {
+  private async _init() {
     if (!this._socket) return;
+    await this.discordSocket.connect();
 
     this._socket.on('connection', (socket, request) => {
       if (!this.discordSocket.ready) {
