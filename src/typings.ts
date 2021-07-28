@@ -9,6 +9,30 @@ export interface DiscordPayload {
   t?: EventTypes;
 }
 
+export interface discordUser {
+  username: string;
+  public_flags: number;
+  id: string;
+  discriminator: string;
+  avatar: string | null;
+}
+
+export interface discordRole {
+  id: string;
+  position: number;
+  name: string;
+  managed: boolean;
+  mentionable: boolean;
+  permissions: number;
+  permissions_new: string;
+  hoist: boolean;
+  color: number;
+  tags?: {
+    bot_id?: string;
+    premium_subscriber?: number | null;
+  };
+}
+
 export type EventTypes =
   | 'READY'
   | 'RESUMED'

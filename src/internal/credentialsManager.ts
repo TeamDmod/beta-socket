@@ -32,4 +32,13 @@ export default class CredentialsManager {
     if (typeof stat !== 'boolean') return;
     this.#auth = stat;
   }
+
+  /** The entery level user is at*/
+  get type() {
+    return this.#entryType;
+  }
+  /** The entery level user is at*/
+  set type(type: EntryType) {
+    this.#entryType = type;
+  }
 }

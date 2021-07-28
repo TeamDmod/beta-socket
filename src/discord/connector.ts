@@ -6,21 +6,22 @@ import { EventEmitter } from 'events';
 import websocket from 'ws';
 import { TOKEN } from '../configs';
 import type { clientEvents } from '../ev';
-import { DiscordPayload } from '../typings';
+import { DiscordPayload, discordUser } from '../typings';
 import Api from '../utils/api';
-import Guilds from './guild';
+import Collection from '../utils/collection';
+import Guild from './guild';
 import GuildMember from './member';
 
 export default class discordSocket extends EventEmitter {
   public on!: <K extends keyof clientEvents>(event: K, listener: (...args: clientEvents[K]) => void) => this;
 
-  guilds = new Map<string, Guilds>();
+  guilds = new Collection<string, Guild>();
   // unavailableGuilds = new Map<string, any>();
   _socket: websocket | null = null;
   heartbeatInterval: NodeJS.Timeout | null = null;
   lastHeartbeatAcked = true;
   api = new Api(TOKEN);
-  me = null;
+  me: null | discordUser = null;
   ready = false;
 
   async connect() {
@@ -64,7 +65,10 @@ export default class discordSocket extends EventEmitter {
   }
 
   handlerError(event: websocket.ErrorEvent) {
-    console.log('error:', event);
+    const error = event?.error ?? event;
+    if (!error) return;
+
+    console.log('error:', error);
   }
 
   handlerClose({ reason }: websocket.CloseEvent) {
@@ -141,9 +145,10 @@ export default class discordSocket extends EventEmitter {
       case 'READY': {
         this.me = ev.d.user;
         this.ready = true;
+        this.setPresence();
 
-        for (const guild of ev.d.guilds) this.guilds.set(guild.id, new Guilds(this, guild));
-        this.emit('ready');
+        for (const guild of ev.d.guilds) this.guilds.set(guild.id, new Guild(this, guild));
+        console.log('discord client ready');
         break;
       }
 
@@ -152,7 +157,7 @@ export default class discordSocket extends EventEmitter {
         if (guild) {
           if (!guild.available && !ev.d.unavailable) guild._patch(ev.d);
         } else {
-          const guild = new Guilds(this, ev.d);
+          const guild = new Guild(this, ev.d);
           this.guilds.set(ev.d.id, guild);
         }
         break;
@@ -162,9 +167,37 @@ export default class discordSocket extends EventEmitter {
         const guild = this.guilds.get(ev.d.guild_id);
         if (!guild) return;
 
-        for (const member of ev.d.members) guild.members.set(member.user.id, new GuildMember(this, member));
+        for (const member of ev.d.members) guild.members.set(member.user.id, new GuildMember(this, member, guild));
 
         this.lastHeartbeatAcked = true;
+        break;
+      }
+
+      case 'GUILD_MEMBER_UPDATE': {
+        const guild = this.guilds.get(ev.d.guild_id);
+        if (!guild) return;
+        const member = guild.members.get(ev.d.user.id);
+        if (!member) return;
+
+        const newMember = new GuildMember(this, ev.d, guild);
+
+        if (newMember.permissions !== member.permissions) {
+          /**
+           * Emited when member permissions are updated
+           * Never emited for a server owner, as they have top permissions level for ever :eyes:
+           * @emit "GUILD_PRIVILEGE_UPDATE"
+           */
+          this.emit('GUILD_PRIVILEGE_UPDATE', {
+            guild_id: guild.id,
+            data: {
+              id: member.id,
+              tag: `${member.user.username}#${member.user.discriminator}`,
+              permissions: newMember.permissions,
+            },
+          });
+        }
+
+        member._patch(ev.d);
         break;
       }
 
@@ -173,4 +206,46 @@ export default class discordSocket extends EventEmitter {
         break;
     }
   }
+
+  setPresence(data?: presenceData) {
+    this.sendPayload({
+      op: 3,
+      d: {
+        since: data?.since || Date.now(),
+        activities: data?.activities ?? [
+          {
+            name: 'Over All',
+            type: 3,
+          },
+        ],
+        status: data?.status || 'dnd',
+        afk: !!data?.afk,
+      },
+    });
+  }
+
+  incrementMaxListeners() {
+    const maxListeners = this.getMaxListeners();
+    if (maxListeners !== 0) {
+      this.setMaxListeners(maxListeners + 1);
+    }
+  }
+
+  decrementMaxListeners() {
+    const maxListeners = this.getMaxListeners();
+    if (maxListeners !== 0) {
+      this.setMaxListeners(maxListeners - 1);
+    }
+  }
+}
+
+interface presenceData {
+  since?: number;
+  activities?: {
+    name: string;
+    type: 0 | 1 | 2 | 3 | 4 | 5;
+    url?: string | null;
+  }[];
+  status?: 'dnd' | 'online' | 'idle';
+  afk?: boolean;
 }

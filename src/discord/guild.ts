@@ -2,10 +2,12 @@
  * ©copyright 2021 dmod
  */
 
+import { discordRole } from '../typings';
+import Collection from '../utils/collection';
 import discordSocket from './connector';
 import GuildMember from './member';
 
-export default class Guilds {
+export default class Guild {
   connector!: discordSocket;
   id!: string;
   name!: string;
@@ -20,12 +22,14 @@ export default class Guilds {
   banner!: string | null;
   nsfw?: boolean;
   available!: boolean;
-  members: Map<string, GuildMember>;
+  roles: Collection<string, discordRole>;
+  members: Collection<string, GuildMember>;
 
   constructor(connector: discordSocket, data: any) {
     Object.defineProperty(this, 'connector', { value: connector });
 
-    this.members = new Map();
+    this.members = new Collection();
+    this.roles = new Collection();
 
     if (data.unavailable) {
       this.available = false;
@@ -49,9 +53,12 @@ export default class Guilds {
     this.mfaLevel = data.mfa_level;
     if ('nsfw' in data) this.nsfw = data.nsfw;
     this.region = data.region;
+    if ('roles' in data) {
+      for (const role of data.roles) this.roles.set(role.id, role);
+    }
 
     if (data.members) {
-      for (const member of data.members) this.members.set(member.user.id, new GuildMember(this.connector, member));
+      for (const member of data.members) this.members.set(member.user.id, new GuildMember(this.connector, member, this));
 
       if (this.members.size < this.memberCount) {
         const nonce = Date.now().toString() + Math.random().toString(36);

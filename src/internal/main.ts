@@ -8,11 +8,11 @@ import CredentialsManager from './credentialsManager';
 
 interface PayloadMain {
   op: number;
-  ev?: string;
+  t?: string | null;
   d?: any;
 }
 
-const toJson = (content: PayloadMain) => JSON.stringify(content);
+const toJson = (content: PayloadMain) => JSON.stringify({ d: null, t: null, ...content });
 const fromStringToPayload = (content: string) => JSON.parse(content) as PayloadMain;
 
 export default class connection {
@@ -26,7 +26,7 @@ export default class connection {
 
   private async _init() {
     if (!this._socket) return;
-    await this.discordSocket.connect();
+    this.discordSocket.connect();
 
     this._socket.on('connection', (socket, request) => {
       if (!this.discordSocket.ready) {
@@ -38,7 +38,7 @@ export default class connection {
       const credentials = new CredentialsManager();
 
       socket.send(toJson({ op: 0 }));
-      socket.on('message', this.messageHandler.bind(this, credentials));
+      socket.on('message', this.messageHandler.bind(this, credentials, socket));
 
       // If the connection takes to long
       setTimeout(() => {
@@ -48,12 +48,48 @@ export default class connection {
       console.log('Socket resived connection');
     });
 
+    this.discordSocket.on('GUILD_PRIVILEGE_UPDATE', (...args) => console.log(args));
     this._socket.on('listening', () => console.log('Socket connected'));
   }
 
-  messageHandler(credentials: CredentialsManager, data: webscoket.Data) {
+  messageHandler(credentials: CredentialsManager, socket: webscoket, data: webscoket.Data) {
     const payload = fromStringToPayload(data as string);
 
-    console.log(payload, credentials);
+    switch (payload.op) {
+      case 1: {
+        const has = Object.prototype.hasOwnProperty;
+        if (!payload.d || !(payload.d && has.call(payload.d, 'token') && has.call(payload.d, 'uid'))) {
+          socket.close(1000, 'Missing authentication data');
+          return;
+        }
+
+        const { token, uid } = payload.d;
+
+        if (token === null && uid === null) {
+          credentials.type = 1;
+          credentials.auth = true;
+          socket.send(
+            toJson({
+              op: 2,
+              t: null,
+              d: {
+                missed_notifications: [],
+              },
+            })
+          );
+        } else if (token && uid) {
+          // TODO: check the database if this is a valid token
+          // credentials.type = 2;
+          // credentials.auth = true;
+          socket.close(1000, 'Invalid formating of authentication');
+        } else {
+          socket.close(1000, 'Invalid formating of authentication');
+        }
+        break;
+      }
+
+      default:
+        break;
+    }
   }
 }

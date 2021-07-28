@@ -2,12 +2,15 @@
  * ©copyright 2021 dmod
  */
 
+import { discordUser } from '../typings';
 import discordSocket from './connector';
+import Guild from './guild';
+import Permissions from './permissions';
 
 export default class GuildMember {
   connector!: discordSocket;
   id!: string;
-  user: unknown;
+  user!: discordUser;
   roles!: string[];
   premiumSince!: string;
   pending!: boolean;
@@ -18,9 +21,13 @@ export default class GuildMember {
   hoistedRole!: string;
   deaf!: boolean;
   avatar!: string | null;
+  guild: Guild;
+  _permissions: Permissions;
 
-  constructor(connector: discordSocket, data: any) {
+  constructor(connector: discordSocket, data: any, guild: Guild) {
     Object.defineProperty(this, 'connector', { value: connector });
+    this.guild = guild;
+    this._permissions = new Permissions(this.guild, this);
     this._patch(data);
   }
 
@@ -37,5 +44,13 @@ export default class GuildMember {
     this.hoistedRole = data.hoisted_role;
     this.deaf = data.deaf;
     this.avatar = data.avatar;
+  }
+
+  get permissions() {
+    return this._permissions.permissions;
+  }
+
+  get permissionsJson() {
+    return this._permissions.toJson();
   }
 }
