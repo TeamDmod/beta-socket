@@ -187,13 +187,10 @@ export default class discordSocket extends EventEmitter {
            * Never emited for a server owner, as they have top permissions level for ever :eyes:
            * @emit "GUILD_PRIVILEGE_UPDATE"
            */
-          this.emit('GUILD_PRIVILEGE_UPDATE', {
-            guild_id: guild.id,
-            data: {
-              id: member.id,
-              tag: `${member.user.username}#${member.user.discriminator}`,
-              permissions: newMember.permissions,
-            },
+          this.emit('GUILD_PRIVILEGE_UPDATE', guild.id, {
+            id: member.id,
+            tag: `${member.user.username}#${member.user.discriminator}`,
+            permissions: newMember.permissions,
           });
         }
 
@@ -218,7 +215,7 @@ export default class discordSocket extends EventEmitter {
             type: 3,
           },
         ],
-        status: data?.status || 'dnd',
+        status: data?.status || 'online',
         afk: !!data?.afk,
       },
     });

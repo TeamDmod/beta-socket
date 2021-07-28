@@ -12,6 +12,8 @@ class API {
   async getGateway(): Promise<string> {
     const res = await fetch(`${this.API_ENDPOINT}/gateway`);
     const json = await res.json();
+    // TODO: update to gatway v9
+    // updaing permissions; https://discord.com/developers/docs/topics/permissions
     return json.url + '?v=6&encoding=json';
   }
 }

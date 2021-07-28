@@ -4,6 +4,7 @@
 
 import webscoket from 'ws';
 import discordSocket from '../discord/connector';
+import { OperationCodes } from './constents';
 import CredentialsManager from './credentialsManager';
 
 interface PayloadMain {
@@ -37,7 +38,7 @@ export default class connection {
       }
       const credentials = new CredentialsManager();
 
-      socket.send(toJson({ op: 0 }));
+      socket.send(toJson({ op: OperationCodes.REQUEST_AUTH }));
       socket.on('message', this.messageHandler.bind(this, credentials, socket));
 
       // If the connection takes to long
@@ -56,7 +57,7 @@ export default class connection {
     const payload = fromStringToPayload(data as string);
 
     switch (payload.op) {
-      case 1: {
+      case OperationCodes.AUTHENTICATION: {
         const has = Object.prototype.hasOwnProperty;
         if (!payload.d || !(payload.d && has.call(payload.d, 'token') && has.call(payload.d, 'uid'))) {
           socket.close(1000, 'Missing authentication data');
@@ -70,7 +71,7 @@ export default class connection {
           credentials.auth = true;
           socket.send(
             toJson({
-              op: 2,
+              op: OperationCodes.AUTHENTICATION_PASS,
               t: null,
               d: {
                 missed_notifications: [],
