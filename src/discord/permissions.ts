@@ -36,7 +36,7 @@ export default class Permissions {
 
     const getRole = (id: string) => this.guild.roles.find(role => role.id === id);
 
-    for (const id of this.member.roles) {
+    for (const id of this.member.roles.keys()) {
       const role = getRole(id);
       permissions |= BigInt(role!.permissions);
     }

@@ -2,7 +2,8 @@
  * ©copyright 2021 dmod
  */
 
-import { discordUser } from '../typings';
+import { discordRole, discordUser } from '../typings';
+import Collection from '../utils/collection';
 import discordSocket from './connector';
 import Guild from './guild';
 import Permissions from './permissions';
@@ -11,7 +12,7 @@ export default class GuildMember {
   connector!: discordSocket;
   id!: string;
   user!: discordUser;
-  roles!: string[];
+  roles!: Collection<string, discordRole>;
   premiumSince!: string;
   pending!: boolean;
   nickname!: string | null;
@@ -27,6 +28,7 @@ export default class GuildMember {
   constructor(connector: discordSocket, data: any, guild: Guild) {
     Object.defineProperty(this, 'connector', { value: connector });
     this.guild = guild;
+    this.roles = new Collection();
     this._permissions = new Permissions(this.guild, this);
     this._patch(data);
   }
@@ -34,7 +36,12 @@ export default class GuildMember {
   _patch(data: any) {
     this.id = data.user.id;
     this.user = data.user;
-    this.roles = data.roles;
+    if ('roles' in data) {
+      for (const id of data.roles) {
+        const role = this.guild.roles.get(id);
+        role && this.roles.set(id, role);
+      }
+    }
     this.premiumSince = data.premium_since;
     this.pending = data.pending;
     this.nickname = data.nick;

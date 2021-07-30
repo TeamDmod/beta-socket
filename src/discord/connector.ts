@@ -220,6 +220,9 @@ export default class discordSocket extends EventEmitter {
         const role = guild.roles.get(ev.d.role.id);
         if (!role) return;
 
+        guild.roles.delete(ev.d.role.id);
+        guild.roles.set(ev.d.role.id, ev.d.role);
+
         if (role.permissions !== ev.d.role.permissions) {
           /**
            * Emited when role permissions are changed
@@ -230,9 +233,6 @@ export default class discordSocket extends EventEmitter {
             permissions: ev.d.role.permissions.toString(),
           });
         }
-
-        guild.roles.delete(ev.d.role.id);
-        guild.roles.set(ev.d.role.id, ev.d.role);
         break;
       }
 

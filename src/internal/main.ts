@@ -151,7 +151,7 @@ export default class connection {
           credentials.setGuildInfo(gid, token);
           eventManager.register('GUILD_PRIVILEGE_UPDATE', (id, d) => {
             // Ignore any other user
-            // if (d.id !== credentials.userID) return {};
+            if (d.id !== credentials.userID) return {};
 
             return {
               data: { guild_id: id, ...d },
@@ -163,7 +163,7 @@ export default class connection {
             if (!guild) return {};
             const member = guild.members.get(credentials.userID as string);
             if (!member) return {};
-            if (!member.roles.includes(d.id)) return {};
+            if (!member.roles.has(d.id)) return {};
 
             // Build out new user permissions
             const permissions = new Permissions(guild, member);
