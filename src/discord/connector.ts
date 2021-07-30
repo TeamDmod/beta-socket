@@ -184,7 +184,7 @@ export default class discordSocket extends EventEmitter {
         if (newMember.permissions !== member.permissions) {
           /**
            * Emited when member permissions are updated
-           * Never emited for a server owner, as they have top permissions level for ever :eyes:
+           * Never emited for a server owner, as they have top permissions level forever :eyes:
            * @emit "GUILD_PRIVILEGE_UPDATE"
            */
           this.emit('GUILD_PRIVILEGE_UPDATE', guild.id, {
@@ -195,6 +195,44 @@ export default class discordSocket extends EventEmitter {
         }
 
         member._patch(ev.d);
+        break;
+      }
+
+      case 'GUILD_ROLE_CREATE': {
+        const guild = this.guilds.get(ev.d.guild_id);
+        if (!guild) return;
+
+        guild.roles.set(ev.d.role.id, ev.d.role);
+        break;
+      }
+
+      case 'GUILD_ROLE_DELETE': {
+        const guild = this.guilds.get(ev.d.guild_id);
+        if (!guild) return;
+
+        guild.roles.delete(ev.d.role_id);
+        break;
+      }
+
+      case 'GUILD_ROLE_UPDATE': {
+        const guild = this.guilds.get(ev.d.guild_id);
+        if (!guild) return;
+        const role = guild.roles.get(ev.d.role.id);
+        if (!role) return;
+
+        if (role.permissions !== ev.d.role.permissions) {
+          /**
+           * Emited when role permissions are changed
+           * @emit "GUILD_ROLE_PERMISSIONS"
+           */
+          this.emit('GUILD_ROLE_PERMISSIONS', guild.id, {
+            id: role.id,
+            permissions: ev.d.role.permissions.toString(),
+          });
+        }
+
+        guild.roles.delete(ev.d.role.id);
+        guild.roles.set(ev.d.role.id, ev.d.role);
         break;
       }
 

@@ -16,7 +16,7 @@ export default class EventsManager extends EventEmitter {
   }
   #events: { eventName: string; fn: Function }[] = [];
 
-  register<K extends keyof clientEvents>(event: K, fn: (...args0: clientEvents[K]) => ERE) {
+  register<K extends keyof clientEvents>(event: K, fn: (...args0: clientEvents[K]) => ERE | {}) {
     if (this.#events.find(e => e.eventName === event)) return;
 
     const fuc = (...args0: any[]) => {

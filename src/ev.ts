@@ -10,5 +10,12 @@ export interface clientEvents {
       tag: string;
       permissions: bigint;
     }
+  ];
+  GUILD_ROLE_PERMISSIONS: [
+    guild_id: string,
+    data: {
+      id: string,
+      permissions: string
+    }
   ]
 }

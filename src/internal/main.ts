@@ -5,6 +5,7 @@
 import webscoket from 'ws';
 import discordSocket from '../discord/connector';
 import { OperationCodes } from './constents';
+import Permissions from '../discord/permissions';
 import CredentialsManager from './credentialsManager';
 import EventsManager from './EventsManager';
 
@@ -149,13 +150,37 @@ export default class connection {
 
           credentials.setGuildInfo(gid, token);
           eventManager.register('GUILD_PRIVILEGE_UPDATE', (id, d) => {
+            // Ignore any other user
+            // if (d.id !== credentials.userID) return {};
+
             return {
               data: { guild_id: id, ...d },
               event: 'GUILD_PRIVILEGE_UPDATE',
             };
           });
+          eventManager.register('GUILD_ROLE_PERMISSIONS', (id, d) => {
+            const guild = this.discordSocket.guilds.get(id);
+            if (!guild) return {};
+            const member = guild.members.get(credentials.userID as string);
+            if (!member) return {};
+            if (!member.roles.includes(d.id)) return {};
+
+            // Build out new user permissions
+            const permissions = new Permissions(guild, member);
+
+            return {
+              data: {
+                guild_id: guild.id,
+                id: credentials.userID,
+                tag: `${member.user.username}#${member.user.discriminator}`,
+                permissions: permissions.permissions.toString(),
+              },
+              event: 'GUILD_PRIVILEGE_UPDATE',
+            };
+          });
 
           credentials.fn = ({ data, event }: any) => {
+            if (!data || !event) return;
             socket.send(
               toJson({
                 op: OperationCodes.EVENT,
