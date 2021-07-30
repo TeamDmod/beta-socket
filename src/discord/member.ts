@@ -53,4 +53,12 @@ export default class GuildMember {
   get permissionsJson() {
     return this._permissions.toJson();
   }
+
+  toUserGateway() {
+    return {
+      id: this.id,
+      tag: `${this.user.username}#${this.user.discriminator}`,
+      permissions: this.permissions.toString(),
+    };
+  }
 }

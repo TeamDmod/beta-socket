@@ -190,7 +190,7 @@ export default class discordSocket extends EventEmitter {
           this.emit('GUILD_PRIVILEGE_UPDATE', guild.id, {
             id: member.id,
             tag: `${member.user.username}#${member.user.discriminator}`,
-            permissions: newMember.permissions,
+            permissions: newMember.permissions.toString(),
           });
         }
 

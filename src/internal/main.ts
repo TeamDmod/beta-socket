@@ -6,15 +6,19 @@ import webscoket from 'ws';
 import discordSocket from '../discord/connector';
 import { OperationCodes } from './constents';
 import CredentialsManager from './credentialsManager';
+import EventsManager from './EventsManager';
 
+type commands = 'CONNECT_GUILD' | 'DESCONNECT_GUILD';
 interface PayloadMain {
   op: number;
   t?: string | null;
+  cmd?: commands;
   d?: any;
 }
 
 const toJson = (content: PayloadMain) => JSON.stringify({ d: null, t: null, ...content });
 const fromStringToPayload = (content: string) => JSON.parse(content) as PayloadMain;
+const has = Object.prototype.hasOwnProperty;
 
 export default class connection {
   _socket: webscoket.Server | null = null;
@@ -28,6 +32,7 @@ export default class connection {
   private async _init() {
     if (!this._socket) return;
     this.discordSocket.connect();
+    const eventManager = new EventsManager(this.discordSocket);
 
     this._socket.on('connection', (socket, request) => {
       if (!this.discordSocket.ready) {
@@ -39,7 +44,10 @@ export default class connection {
       const credentials = new CredentialsManager();
 
       socket.send(toJson({ op: OperationCodes.REQUEST_AUTH }));
-      socket.on('message', this.messageHandler.bind(this, credentials, socket));
+      socket.on('message', this.messageHandler.bind(this, credentials, socket, eventManager));
+      socket.on('close', () => {
+        if (credentials.guildID && credentials.fn) eventManager.removeListener(credentials.guildID, credentials.fn as (...args: any[]) => void);
+      });
 
       // If the connection takes to long
       setTimeout(() => {
@@ -49,16 +57,14 @@ export default class connection {
       console.log('Socket resived connection');
     });
 
-    this.discordSocket.on('GUILD_PRIVILEGE_UPDATE', (...args) => console.log(args));
     this._socket.on('listening', () => console.log('Socket connected'));
   }
 
-  messageHandler(credentials: CredentialsManager, socket: webscoket, data: webscoket.Data) {
+  messageHandler(credentials: CredentialsManager, socket: webscoket, eventManager: EventsManager, data: webscoket.Data) {
     const payload = fromStringToPayload(data as string);
 
     switch (payload.op) {
       case OperationCodes.AUTHENTICATION: {
-        const has = Object.prototype.hasOwnProperty;
         if (!payload.d || !(payload.d && has.call(payload.d, 'token') && has.call(payload.d, 'uid'))) {
           socket.close(1000, 'Missing authentication data');
           return;
@@ -81,10 +87,123 @@ export default class connection {
         } else if (token && uid) {
           // TODO: check the database if this is a valid token
           // credentials.type = 2;
+          // credentials.userID = uid;
           // credentials.auth = true;
           socket.close(1000, 'Invalid formating of authentication');
         } else {
           socket.close(1000, 'Invalid formating of authentication');
+        }
+        break;
+      }
+
+      case OperationCodes.COMMAND: {
+        if (payload.cmd === 'CONNECT_GUILD') {
+          if (credentials.guildAuth) {
+            return;
+          }
+          if (!payload.d || !(payload.d && has.call(payload.d, 'token') && has.call(payload.d, 'gid'))) {
+            socket.close(1000, 'Missing authentication data');
+            return;
+          }
+
+          const { token, gid } = payload.d as { token: string; gid: string };
+
+          if (!token || !gid) {
+            socket.close(1000, 'Invalid formating of authentication');
+            return;
+          }
+
+          const guild = this.discordSocket.guilds.get(gid);
+          if (!guild) {
+            socket.close(1000, 'Guild not found');
+            return;
+          }
+
+          // TODO/NOTE: get the token from database. Make sure the token is for this guild
+          const fackTokens = [
+            {
+              guildID: '862560584170864680',
+              token: 'ojafoihse9fd',
+              hash: '0123456789',
+              use: 1,
+            },
+            {
+              guildID: '728814703266234435',
+              token: 'ojafoihse9fd',
+              hash: '0123456789',
+              use: 1,
+            },
+          ];
+
+          const tokenInfo = fackTokens.find(t => t.hash === token && t.guildID === gid);
+
+          if (!tokenInfo) {
+            socket.close(1000, 'Invalid token');
+            return;
+          }
+
+          if (tokenInfo.use > 6) {
+            socket.close(1000, 'Invalid token');
+            return;
+          }
+
+          credentials.setGuildInfo(gid, token);
+          eventManager.register('GUILD_PRIVILEGE_UPDATE', (id, d) => {
+            return {
+              data: { guild_id: id, ...d },
+              event: 'GUILD_PRIVILEGE_UPDATE',
+            };
+          });
+
+          credentials.fn = ({ data, event }: any) => {
+            socket.send(
+              toJson({
+                op: OperationCodes.EVENT,
+                t: event,
+                d: data,
+              })
+            );
+          };
+
+          eventManager.on(credentials.guildID ?? '', credentials.fn as (...args: any[]) => void);
+
+          socket.send(
+            toJson({
+              op: OperationCodes.COMMAND_RESPONCE,
+              d: {
+                for: 'CONNECT_GUILD',
+                data: {
+                  guild,
+                  user: credentials.userID ? guild.members.get(credentials.userID)?.toUserGateway() ?? null : null,
+                },
+              },
+            })
+          );
+        } else if (payload.cmd === 'DESCONNECT_GUILD') {
+          if (!credentials.guildAuth) {
+            return;
+          }
+
+          if (!payload.d || !(payload.d && has.call(payload.d, 'gid'))) {
+            socket.close(1000, 'Missing authentication data');
+            return;
+          }
+
+          const { gid } = payload.d;
+          eventManager.removeListener(gid, credentials.fn as (...args: any[]) => void);
+          credentials.setGuildInfo(null, null);
+
+          socket.send(
+            toJson({
+              op: OperationCodes.COMMAND_RESPONCE,
+              d: {
+                for: 'DESCONNECT_GUILD',
+                data: {
+                  success: true,
+                },
+              },
+            })
+          );
         }
         break;
       }
