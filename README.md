@@ -155,6 +155,7 @@ GUILD_MEMBER_UPDATE ->
   "token": "415ojasd._05345a8f98agf89a4oh3", // Original token base
   "hash": "3AD3078884F5F8A7885CD5FEB99B8E1CF4C0C74258DB1B3F34F8B541DD55C6D9F8E2FA76F45D1A245C1287635DB8EB6245FDF1B9920ED80F0D41588BA4C25412", // SHA512 Hash
   "expire": DATE,
+  "for": "12345", // object key id
   "use": 0 // How many time this token has been used limited max to 5-10??
 }
 ```

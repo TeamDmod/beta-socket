@@ -13,6 +13,7 @@
   "author": "Wilbert-mad",
   "private": true,
   "dependencies": {
+    "mongoose": "^5.13.5",
     "node-fetch": "^2.6.1",
     "ws": "^7.5.3"
   },

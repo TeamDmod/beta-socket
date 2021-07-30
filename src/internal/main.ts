@@ -8,6 +8,7 @@ import { OperationCodes } from './constents';
 import Permissions from '../discord/permissions';
 import CredentialsManager from './credentialsManager';
 import EventsManager from './EventsManager';
+import tokenModule from '../tokenModule';
 
 type commands = 'CONNECT_GUILD' | 'DESCONNECT_GUILD';
 interface PayloadMain {
@@ -61,7 +62,7 @@ export default class connection {
     this._socket.on('listening', () => console.log('Socket connected'));
   }
 
-  messageHandler(credentials: CredentialsManager, socket: webscoket, eventManager: EventsManager, data: webscoket.Data) {
+  async messageHandler(credentials: CredentialsManager, socket: webscoket, eventManager: EventsManager, data: webscoket.Data) {
     const payload = fromStringToPayload(data as string);
 
     switch (payload.op) {
@@ -120,23 +121,7 @@ export default class connection {
             return;
           }
 
-          // TODO/NOTE: get the token from database. Make sure the token is for this guild
-          const fackTokens = [
-            {
-              guildID: '862560584170864680',
-              token: 'ojafoihse9fd',
-              hash: '0123456789',
-              use: 1,
-            },
-            {
-              guildID: '728814703266234435',
-              token: 'ojafoihse9fd',
-              hash: '0123456789',
-              use: 1,
-            },
-          ];
-
-          const tokenInfo = fackTokens.find(t => t.hash === token && t.guildID === gid);
+          const tokenInfo = await tokenModule.findOne({ tokenHash: token, for: gid });
 
           if (!tokenInfo) {
             socket.close(1000, 'Invalid token');
@@ -147,6 +132,8 @@ export default class connection {
             socket.close(1000, 'Invalid token');
             return;
           }
+
+          tokenInfo.update({ $inc: { use: 1 } });
 
           credentials.setGuildInfo(gid, token);
           eventManager.register('GUILD_PRIVILEGE_UPDATE', (id, d) => {
