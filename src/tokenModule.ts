@@ -6,7 +6,7 @@ import { Schema, model, Model } from 'mongoose';
 
 interface TokenData {
   /*** Typeof token */
-  type: 'user' | 'guild';
+  type: 'user' | 'guild' | 'gatewayGuild' | 'gatewayUser';
   /*** Token key */
   token: string;
   /*** The id if the corresponding id object (guildID/userID) */
@@ -24,7 +24,6 @@ const Token = new Schema({
   },
   for: {
     type: String,
-    required: true,
   },
   token: {
     type: String,
@@ -32,7 +31,6 @@ const Token = new Schema({
   },
   tokenHash: {
     type: String,
-    required: true,
   },
   use: {
     type: Number,

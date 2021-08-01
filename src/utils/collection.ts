@@ -13,4 +13,12 @@ export default class Collection<K, V> extends Map<K, V> {
     }
     return arr;
   }
+
+  public toArray(): V[] {
+    const arr: V[] = [];
+    for (const item of this.values()) {
+      arr.push(item);
+    }
+    return arr;
+  }
 }

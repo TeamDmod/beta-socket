@@ -76,6 +76,23 @@ export default class Guild {
     }
   }
 
+  toGatewayGuild() {
+    return {
+      id: this.id,
+      verification_level: this.verificationLevel,
+      name: this.name,
+      owner_id: this.ownerID,
+      description: this.description,
+      member_count: this.memberCount,
+      premium_tier: this.premiumTier,
+      vanity_url_code: this.vanityUrlCode,
+      banner: this.banner,
+      mfa_level: this.mfaLevel,
+      nfsw: this.nsfw,
+      roles: this.roles.toArray(),
+    };
+  }
+
   get vanityUrl(): string | null {
     if (!this.vanityUrlCode) return null;
     return `https://discord.com/invite/${this.vanityUrlCode}`;

@@ -87,11 +87,22 @@ export default class connection {
             })
           );
         } else if (token && uid) {
-          // TODO: check the database if this is a valid token
-          // credentials.type = 2;
-          // credentials.userID = uid;
-          // credentials.auth = true;
-          socket.close(1000, 'Invalid formating of authentication');
+          const uds = await tokenModule.findOne({ for: uid, tokenHash: token });
+          if (!uds) return socket.close(1000, 'Invalid token');
+          credentials.type = 2;
+          credentials.userID = uid;
+          credentials.auth = true;
+
+          // TODO: featch/save notification
+          socket.send(
+            toJson({
+              op: OperationCodes.AUTHENTICATION_PASS,
+              t: null,
+              d: {
+                missed_notifications: [],
+              },
+            })
+          );
         } else {
           socket.close(1000, 'Invalid formating of authentication');
         }
@@ -128,12 +139,13 @@ export default class connection {
             return;
           }
 
-          if (tokenInfo.use > 6) {
+          if (tokenInfo.use > 6 || tokenInfo.type !== 'gatewayGuild') {
+            await tokenInfo.deleteOne();
             socket.close(1000, 'Invalid token');
             return;
           }
 
-          tokenInfo.update({ $inc: { use: 1 } });
+          await tokenInfo.updateOne({ $inc: { use: 1 } });
 
           credentials.setGuildInfo(gid, token);
           eventManager.register('GUILD_PRIVILEGE_UPDATE', (id, d) => {
@@ -185,7 +197,7 @@ export default class connection {
               d: {
                 for: 'CONNECT_GUILD',
                 data: {
-                  guild,
+                  guild: guild.toGatewayGuild(),
                   user: credentials.userID ? guild.members.get(credentials.userID)?.toUserGateway() ?? null : null,
                 },
               },
