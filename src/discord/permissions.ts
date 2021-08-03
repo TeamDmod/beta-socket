@@ -81,9 +81,13 @@ export const discord_permission_flags = {
   MANAGE_NICKNAMES: 1n << 27n,
   MANAGE_ROLES: 1n << 28n,
   MANAGE_WEBHOOKS: 1n << 29n,
-  MANAGE_EMOJIS: 1n << 30n,
-  USE_APPLICATION_COMMANDS: 1n << 31n,
+  MANAGE_EMOJIS_AND_STICKERS: 1n << 30n,
+  USE_SLASH_COMMANDS: 1n << 31n,
   REQUEST_TO_SPEAK: 1n << 32n,
+  MANAGE_THREADS: 1n << 34n,
+  USE_PUBLIC_THREADS: 1n << 35n,
+  USE_PRIVATE_THREADS: 1n << 36n,
+  USE_EXTERNAL_STICKERS: 1n << 37n,
 };
 
 export const ALL = Object.values(discord_permission_flags).reduce((all, p) => all | p, 0n);

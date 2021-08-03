@@ -6,7 +6,7 @@ import { Schema, model, Model } from 'mongoose';
 
 interface TokenData {
   /*** Typeof token */
-  type: 'user' | 'guild' | 'gatewayGuild' | 'gatewayUser';
+  type: 'user' | 'gatewayGuild' | 'gatewayUser';
   /*** Token key */
   token: string;
   /*** The id if the corresponding id object (guildID/userID) */

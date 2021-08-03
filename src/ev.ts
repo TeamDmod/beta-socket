@@ -17,5 +17,9 @@ export interface clientEvents {
       id: string,
       permissions: string
     }
-  ]
+  ],
+  GUILD_MEMBER_COUNT_CHANGE: [
+    guild_id: string,
+    data: { member_count: number }
+  ],
 }

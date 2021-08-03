@@ -178,6 +178,8 @@ export default class connection {
             };
           });
 
+          eventManager.register('GUILD_MEMBER_COUNT_CHANGE', (id, d) => ({ data: { guild_id: id, ...d }, event: 'GUILD_MEMBER_COUNT_CHANGE' }));
+
           credentials.fn = ({ data, event }: any) => {
             if (!data || !event) return;
             socket.send(

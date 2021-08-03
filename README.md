@@ -137,32 +137,16 @@
 
 Discord event name | Event name | Info
 
-GUILDS_MEMBER_ADD => Emited when a member joins
-
-GUILDS_MEMBER_REMOVE => Emited when a member leaves
+GUILDS_MEMBER_ADD or GUILDS_MEMBER_REMOVE -> GUILD_MEMBER_COUNT_CHANGE => Emited when a member joins/leaves
 
 GUILD_MEMBER_UPDATE ->
 
 - - GUILD_PRIVILEGE_UPDATE => Emited when the current users permissions change in that server
 
-# Other
-
-## Token module
-
-```json
-{
-  "type": "user" | "guild",
-  "token": "415ojasd._05345a8f98agf89a4oh3", // Original token base
-  "hash": "3AD3078884F5F8A7885CD5FEB99B8E1CF4C0C74258DB1B3F34F8B541DD55C6D9F8E2FA76F45D1A245C1287635DB8EB6245FDF1B9920ED80F0D41588BA4C25412", // SHA512 Hash
-  "expire": DATE,
-  "for": "12345", // object key id
-  "use": 0 // How many time this token has been used limited max to 5-10??
-}
-```
-
 # TODO
 
-- [ ] Authentication process
-- [ ] Setup a stable discord gateway connection.
+- [x] Authentication process
+- [x] Setup a stable discord gateway connection.
+- [ ] Start sending/resiving a heartbeat
 
 ©copyright 2021 dmod

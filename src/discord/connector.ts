@@ -16,6 +16,7 @@ export default class discordSocket extends EventEmitter {
   public on!: <K extends keyof clientEvents>(event: K, listener: (...args: clientEvents[K]) => void) => this;
 
   guilds = new Collection<string, Guild>();
+  reconnectTrys = 0;
   // unavailableGuilds = new Map<string, any>();
   _socket: websocket | null = null;
   heartbeatInterval: NodeJS.Timeout | null = null;
@@ -23,8 +24,35 @@ export default class discordSocket extends EventEmitter {
   api = new Api(TOKEN);
   me: null | discordUser = null;
   ready = false;
+  /**
+   * https://github.com/discordjs/discord.js
+   * Gateway ratelimiting used form discord.js
+   * @license Apache License 2.0 - 2021 Amish Shah
+   */
+  ratelimit!: {
+    queue: string[];
+    total: number;
+    remaining: number;
+    time: number;
+    timer: NodeJS.Timer | null;
+  };
+
+  constructor() {
+    super();
+
+    Object.defineProperty(this, 'ratelimit', {
+      value: {
+        queue: [],
+        total: 120,
+        remaining: 120,
+        time: 60e3,
+        timer: null,
+      },
+    });
+  }
 
   async connect() {
+    this.reconnectTrys += 1;
     const ws = (this._socket = new websocket(await this.api.getGateway()));
 
     ws.onmessage = this.handleMessage.bind(this);
@@ -64,9 +92,15 @@ export default class discordSocket extends EventEmitter {
     if (payload.t) await this.handelT(payload);
   }
 
+  tryReconnect() {}
+
   handlerError(event: websocket.ErrorEvent) {
     const error = event?.error ?? event;
     if (!error) return;
+
+    if (this.reconnectTrys < 20) {
+      setTimeout(() => this.connect(), 2000);
+    }
 
     console.log('error:', error);
   }
@@ -77,6 +111,10 @@ export default class discordSocket extends EventEmitter {
     this.setHeartbeatTimer(-1);
     // If we still have a connection object, clean up its listeners
     if (this._socket) this._cleanupConnection();
+
+    if (this.reconnectTrys < 20) {
+      setTimeout(() => this.connect(), 2000);
+    }
 
     console.log('reason:', reason);
   }
@@ -101,9 +139,14 @@ export default class discordSocket extends EventEmitter {
     this.sendPayload({ op: 1, d: null });
   }
 
-  sendPayload(data: DiscordPayload) {
+  sendPayload(data: DiscordPayload, important = false) {
+    this.ratelimit.queue[important ? 'unshift' : 'push'](JSON.stringify(data));
+    this.process();
+  }
+
+  _send(payload: string) {
     if (this._socket && this._socket.readyState !== 1) return;
-    this._socket!.send(JSON.stringify(data));
+    this._socket!.send(payload);
   }
 
   identify() {
@@ -236,6 +279,32 @@ export default class discordSocket extends EventEmitter {
         break;
       }
 
+      // TODO: Add a limiter as to how many update counts can be sent.
+      case 'GUILD_MEMBER_ADD': {
+        const guild = this.guilds.get(ev.d.guild_id);
+        if (!guild) return;
+        guild.memberCount++;
+        guild.members.set(ev.d.user.d, new GuildMember(this, ev.d, guild));
+
+        this.emit('GUILD_MEMBER_COUNT_CHANGE', guild.id, { member_count: guild.memberCount });
+        break;
+      }
+      case 'GUILD_MEMBER_REMOVE': {
+        const guild = this.guilds.get(ev.d.guild_id);
+        if (!guild) return;
+        guild.memberCount--;
+        guild.members.delete(ev.d.user.d);
+
+        this.emit('GUILD_MEMBER_COUNT_CHANGE', guild.id, { member_count: guild.memberCount });
+        break;
+      }
+
+      case 'APPLICATION_COMMAND_CREATE':
+      case 'APPLICATION_COMMAND_DELETE':
+      case 'APPLICATION_COMMAND_UPDATE':
+      case 'GUILD_APPLICATION_COMMAND_COUNTS_UPDATE':
+        break;
+
       default:
         console.log('Unhandled:\n', ev);
         break;
@@ -257,6 +326,23 @@ export default class discordSocket extends EventEmitter {
         afk: !!data?.afk,
       },
     });
+  }
+
+  process() {
+    if (this.ratelimit.remaining === 0) return;
+    if (this.ratelimit.queue.length === 0) return;
+    if (this.ratelimit.remaining === this.ratelimit.total) {
+      this.ratelimit.timer = setTimeout(() => {
+        this.ratelimit.remaining = this.ratelimit.total;
+        this.process();
+      }, this.ratelimit.time);
+    }
+    while (this.ratelimit.remaining > 0) {
+      const item = this.ratelimit.queue.shift();
+      if (!item) return;
+      this._send(item);
+      this.ratelimit.remaining--;
+    }
   }
 
   incrementMaxListeners() {
