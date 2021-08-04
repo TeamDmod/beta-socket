@@ -60,7 +60,7 @@ export default class connection {
         return;
       }
       const credentials = new CredentialsManager();
-      const bucket = new Bucket(15, 5000, 10, 10000);
+      const bucket = new Bucket(50, 5000, 5, 10000);
 
       socket.send(toJson({ op: OperationCodes.REQUEST_AUTH }));
       socket.on('message', this.messageHandler.bind(this, credentials, socket, eventManager, bucket));
