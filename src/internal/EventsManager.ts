@@ -33,6 +33,20 @@ export default class EventsManager extends EventEmitter {
     this.discord.on(event, fuc);
   }
 
+  incrementMaxListeners() {
+    const maxListeners = this.getMaxListeners();
+    if (maxListeners !== 0) {
+      this.setMaxListeners(maxListeners + 1);
+    }
+  }
+
+  decrementMaxListeners() {
+    const maxListeners = this.getMaxListeners();
+    if (maxListeners !== 0) {
+      this.setMaxListeners(maxListeners - 1);
+    }
+  }
+
   clear() {
     for (const event of this.#events) {
       this.removeListener(event.eventName, event.fn as (...args: any[]) => void);

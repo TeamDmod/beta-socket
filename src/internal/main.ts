@@ -8,7 +8,11 @@ import { OperationCodes } from './constents';
 import Permissions from '../discord/permissions';
 import CredentialsManager from './credentialsManager';
 import EventsManager from './EventsManager';
+import { createServer } from 'https';
+import fs from 'fs';
+import path from 'path';
 import tokenModule from '../tokenModule';
+import Bucket from '../utils/bucket';
 
 type commands = 'CONNECT_GUILD' | 'DESCONNECT_GUILD';
 interface PayloadMain {
@@ -27,8 +31,16 @@ export default class connection {
   discordSocket = new discordSocket();
 
   constructor() {
-    this._socket = new webscoket.Server({ port: 7102 });
+    if (process.env.NODE_ENV === 'production') {
+      this.createServer();
+    } else {
+      this._socket = new webscoket.Server({ port: 7102, maxPayload: 1000 });
+    }
     this._init();
+  }
+
+  get origin() {
+    return process.env.NODE_ENV === 'production' ? 'https://dmod.gg' : 'http://localhost:3000';
   }
 
   private async _init() {
@@ -37,17 +49,28 @@ export default class connection {
     const eventManager = new EventsManager(this.discordSocket);
 
     this._socket.on('connection', (socket, request) => {
+      if (request.headers.origin !== this.origin) {
+        socket.close(1000, 'CORS');
+        return;
+      }
       if (!this.discordSocket.ready) {
         try {
           socket.close(1000, 'Client not ready');
-        } catch (_) {}
+        } catch {}
         return;
       }
       const credentials = new CredentialsManager();
+      const bucket = new Bucket(15, 5000, 10, 10000);
 
       socket.send(toJson({ op: OperationCodes.REQUEST_AUTH }));
-      socket.on('message', this.messageHandler.bind(this, credentials, socket, eventManager));
+      socket.on('message', this.messageHandler.bind(this, credentials, socket, eventManager, bucket));
+      bucket.on('limitHit', () => {
+        socket.close(1000, 'Rate Limited');
+        eventManager.decrementMaxListeners();
+        if (credentials.guildID && credentials.fn) eventManager.removeListener(credentials.guildID, credentials.fn as (...args: any[]) => void);
+      });
       socket.on('close', () => {
+        eventManager.decrementMaxListeners();
         if (credentials.guildID && credentials.fn) eventManager.removeListener(credentials.guildID, credentials.fn as (...args: any[]) => void);
       });
 
@@ -62,7 +85,8 @@ export default class connection {
     this._socket.on('listening', () => console.log('Socket connected'));
   }
 
-  async messageHandler(credentials: CredentialsManager, socket: webscoket, eventManager: EventsManager, data: webscoket.Data) {
+  async messageHandler(credentials: CredentialsManager, socket: webscoket, eventManager: EventsManager, bucket: Bucket, data: webscoket.Data) {
+    bucket.add();
     const payload = fromStringToPayload(data as string);
 
     switch (payload.op) {
@@ -191,6 +215,7 @@ export default class connection {
             );
           };
 
+          eventManager.incrementMaxListeners();
           eventManager.on(credentials.guildID ?? '', credentials.fn as (...args: any[]) => void);
 
           socket.send(
@@ -235,7 +260,19 @@ export default class connection {
       }
 
       default:
+        socket.close(1000, 'Unknown data');
         break;
     }
+  }
+
+  createServer() {
+    const server = createServer({
+      cert: fs.readFileSync(path.join(process.cwd(), '/server.crt')),
+      key: fs.readFileSync(path.join(process.cwd(), '/server.key')),
+    });
+    this._socket = new webscoket.Server({ server, maxPayload: 1000 });
+
+    const port = process.env.PORT || 7102;
+    server.listen(port);
   }
 }

@@ -3,3 +3,9 @@ yarn.lock
 package-lock.json
 dist/
 .env
+
+lib/ddos.js
+# private keys
+*.crt
+*.key
+*.pem

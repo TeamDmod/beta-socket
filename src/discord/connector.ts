@@ -92,8 +92,6 @@ export default class discordSocket extends EventEmitter {
     if (payload.t) await this.handelT(payload);
   }
 
-  tryReconnect() {}
-
   handlerError(event: websocket.ErrorEvent) {
     const error = event?.error ?? event;
     if (!error) return;
@@ -322,7 +320,7 @@ export default class discordSocket extends EventEmitter {
             type: 3,
           },
         ],
-        status: data?.status || 'online',
+        status: data?.status || this.reconnectTrys >= 15 ? 'dnd' : 'online',
         afk: !!data?.afk,
       },
     });
