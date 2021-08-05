@@ -6,9 +6,11 @@ import { EventEmitter } from 'events';
 import websocket from 'ws';
 import { TOKEN } from '../configs';
 import type { clientEvents } from '../ev';
+import { OperationCodes } from '../internal/constents';
 import { DiscordPayload, discordUser } from '../typings';
 import Api from '../utils/api';
 import Collection from '../utils/collection';
+import { Opcodes } from './constents';
 import Guild from './guild';
 import GuildMember from './member';
 
@@ -17,6 +19,9 @@ export default class discordSocket extends EventEmitter {
 
   guilds = new Collection<string, Guild>();
   reconnectTrys = 0;
+  #isNextresume = false;
+  sequence: number = -1;
+  sessionID?: null | number;
   // unavailableGuilds = new Map<string, any>();
   _socket: websocket | null = null;
   heartbeatInterval: NodeJS.Timeout | null = null;
@@ -63,24 +68,36 @@ export default class discordSocket extends EventEmitter {
   async handleMessage(event: websocket.MessageEvent) {
     const payload: DiscordPayload = JSON.parse(event.data as string);
 
+    if ((payload.s as number) > this.sequence) this.sequence = payload.s as number;
+
     switch (payload.op) {
-      case 10:
-        this.identify();
+      case Opcodes.HELLO:
+        console.log('Identifying/Resuming...');
+
+        if (this.#isNextresume) {
+          this.resume();
+        } else {
+          this.#isNextresume = true;
+          this.identify();
+        }
         this.setHeartbeatTimer(payload.d.heartbeat_interval);
         break;
 
-      case 9:
-        this.identify();
+      case Opcodes.INVALID_SESSION:
+        console.log('Invalid session :sweting:');
+
+        this.sequence = -1;
+        this.sessionID = null;
         break;
 
-      case 11:
+      case Opcodes.HEARTBEAT_ACK:
         this.lastHeartbeatAcked = true;
         break;
 
-      case 0:
+      case Opcodes.DISPATCH:
         break;
 
-      case 7:
+      case Opcodes.RECONNECT:
         this.destroy({ code: 4000 });
         break;
 
@@ -147,19 +164,36 @@ export default class discordSocket extends EventEmitter {
     this._socket!.send(payload);
   }
 
-  identify() {
-    this.sendPayload({
-      op: 2,
-      d: {
-        token: TOKEN,
-        intents: (1 << 0) | (1 << 1),
-        properties: {
-          $os: process.platform,
-          $browser: 'dmod-ws',
-          $device: 'dmod-ws',
+  resume() {
+    this.sendPayload(
+      {
+        op: Opcodes.RESUME,
+        d: {
+          token: TOKEN,
+          session_id: this.sessionID,
+          seq: this.sequence,
         },
       },
-    });
+      true
+    );
+  }
+
+  identify() {
+    this.sendPayload(
+      {
+        op: 2,
+        d: {
+          token: TOKEN,
+          intents: (1 << 0) | (1 << 1),
+          properties: {
+            $os: process.platform,
+            $browser: 'dmod-ws',
+            $device: 'dmod-ws',
+          },
+        },
+      },
+      true
+    );
   }
 
   destroy({ code = 1000 } = {}) {
@@ -184,6 +218,7 @@ export default class discordSocket extends EventEmitter {
   private async handelT(ev: DiscordPayload) {
     switch (ev.t) {
       case 'READY': {
+        this.sessionID = ev.s;
         this.me = ev.d.user;
         this.ready = true;
         this.setPresence();
@@ -301,6 +336,7 @@ export default class discordSocket extends EventEmitter {
       case 'APPLICATION_COMMAND_DELETE':
       case 'APPLICATION_COMMAND_UPDATE':
       case 'GUILD_APPLICATION_COMMAND_COUNTS_UPDATE':
+      case 'APPLICATION_COMMAND_PERMISSIONS_UPDATE':
         break;
 
       default:
