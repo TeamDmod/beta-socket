@@ -64,11 +64,6 @@ export default class connection {
 
       socket.send(toJson({ op: OperationCodes.REQUEST_AUTH }));
       socket.on('message', this.messageHandler.bind(this, credentials, socket, eventManager, bucket));
-      bucket.on('limitHit', () => {
-        socket.close(1000, 'Rate Limited');
-        eventManager.decrementMaxListeners();
-        if (credentials.guildID && credentials.fn) eventManager.removeListener(credentials.guildID, credentials.fn as (...args: any[]) => void);
-      });
       socket.on('close', () => {
         eventManager.decrementMaxListeners();
         if (credentials.guildID && credentials.fn) eventManager.removeListener(credentials.guildID, credentials.fn as (...args: any[]) => void);
@@ -86,7 +81,13 @@ export default class connection {
   }
 
   async messageHandler(credentials: CredentialsManager, socket: webscoket, eventManager: EventsManager, bucket: Bucket, data: webscoket.Data) {
-    bucket.add();
+    if (bucket.add()) {
+      socket.close(1000, 'Rate Limited');
+      eventManager.decrementMaxListeners();
+      if (credentials.guildID && credentials.fn) eventManager.removeListener(credentials.guildID, credentials.fn as (...args: any[]) => void);
+      return;
+    }
+
     const payload = fromStringToPayload(data as string);
 
     switch (payload.op) {
@@ -173,6 +174,7 @@ export default class connection {
 
           credentials.setGuildInfo(gid, token);
           eventManager.register('GUILD_PRIVILEGE_UPDATE', (id, d) => {
+            // console.log('EVENT "GUILD_PRIVILEGE_UPDATE", ', d);
             // Ignore any other user
             if (d.id !== credentials.userID) return {};
 
@@ -182,6 +184,7 @@ export default class connection {
             };
           });
           eventManager.register('GUILD_ROLE_PERMISSIONS', (id, d) => {
+            // console.log('EVENT "GUILD_ROLE_PERMISSIONS", ', d);
             const guild = this.discordSocket.guilds.get(id);
             if (!guild) return {};
             const member = guild.members.get(credentials.userID as string);

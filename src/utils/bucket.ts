@@ -2,9 +2,7 @@
  * ©copyright 2021 dmod
  */
 
-import EventEmitter from 'events';
-
-export default class Bucket extends EventEmitter {
+export default class Bucket {
   limitCounter = 0;
   burstCounter = 0;
   maxSize: number;
@@ -12,10 +10,7 @@ export default class Bucket extends EventEmitter {
   burstTime: number;
   burst: number;
 
-  public on!: (event: 'limitHit', listener: () => void) => this;
   constructor(maxSize: number, waitTime: number, burst: number, burstTime: number) {
-    super();
-
     this.maxSize = maxSize;
     this.waitTime = waitTime;
     this.burst = burst;
@@ -23,19 +18,19 @@ export default class Bucket extends EventEmitter {
   }
 
   // https://www.freecodecamp.org/news/how-to-secure-your-websocket-connections-d0be0996c556/
-  add() {
+  add(): boolean {
     if (this.limitCounter >= this.maxSize) {
       if (this.burstCounter >= this.burst) {
-        this.emit('limitHit');
-        return;
+        return true;
       }
       ++this.burstCounter;
       setTimeout(() => {
         // this.verify(callingMethod, ...args);
         setTimeout(() => --this.burstCounter, this.burstTime);
       }, this.waitTime);
-      return;
+      return false;
     }
     this.limitCounter++;
+    return false;
   }
 }

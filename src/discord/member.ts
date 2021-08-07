@@ -37,6 +37,7 @@ export default class GuildMember {
     this.id = data.user.id;
     this.user = data.user;
     if ('roles' in data) {
+      this.roles.clear();
       for (const id of data.roles) {
         const role = this.guild.roles.get(id);
         role && this.roles.set(id, role);

@@ -4,9 +4,8 @@
 
 import { EventEmitter } from 'events';
 import websocket from 'ws';
-import { TOKEN } from '../configs';
+import { PRODUCTION, TOKEN } from '../configs';
 import type { clientEvents } from '../ev';
-import { OperationCodes } from '../internal/constents';
 import { DiscordPayload, discordUser } from '../typings';
 import Api from '../utils/api';
 import Collection from '../utils/collection';
@@ -15,11 +14,11 @@ import Guild from './guild';
 import GuildMember from './member';
 
 export default class discordSocket extends EventEmitter {
+  // #region
   public on!: <K extends keyof clientEvents>(event: K, listener: (...args: clientEvents[K]) => void) => this;
 
   guilds = new Collection<string, Guild>();
   reconnectTrys = 0;
-  #isNextresume = false;
   sequence: number = -1;
   sessionID?: null | number;
   // unavailableGuilds = new Map<string, any>();
@@ -41,6 +40,7 @@ export default class discordSocket extends EventEmitter {
     time: number;
     timer: NodeJS.Timer | null;
   };
+  // #endregion
 
   constructor() {
     super();
@@ -66,25 +66,36 @@ export default class discordSocket extends EventEmitter {
   }
 
   async handleMessage(event: websocket.MessageEvent) {
+    if (!event || (event && !event.data)) {
+      this.debug(`Broken payload resived. "${event.data}"`);
+      return;
+    }
     const payload: DiscordPayload = JSON.parse(event.data as string);
 
-    if ((payload.s as number) > this.sequence) this.sequence = payload.s as number;
+    if (payload.s) {
+      if (payload.s > this.sequence) this.sequence = payload.s as number;
+    }
+
+    this.debug(`Payload resived:
+    Event: ${payload.t ?? 'None'}
+    Sequence: ${this.sequence}
+    Reconnects: ${this.reconnectTrys}
+    Guilds: ${this.guilds.size}
+    `);
 
     switch (payload.op) {
       case Opcodes.HELLO:
-        console.log('Identifying/Resuming...');
+        this.debug(`${!this.sessionID ? 'Identifying' : 'Resuming'}...`);
 
-        if (this.#isNextresume) {
-          this.resume();
-        } else {
-          this.#isNextresume = true;
-          this.identify();
-        }
+        this.identify();
         this.setHeartbeatTimer(payload.d.heartbeat_interval);
         break;
 
       case Opcodes.INVALID_SESSION:
-        console.log('Invalid session :sweting:');
+        this.debug('Invalid session :sweting:');
+
+        this.debug('Identifying...');
+        this.identify();
 
         this.sequence = -1;
         this.sessionID = null;
@@ -92,6 +103,10 @@ export default class discordSocket extends EventEmitter {
 
       case Opcodes.HEARTBEAT_ACK:
         this.lastHeartbeatAcked = true;
+        break;
+
+      case Opcodes.HEARTBEAT:
+        this.sendHeartbeat();
         break;
 
       case Opcodes.DISPATCH:
@@ -102,7 +117,7 @@ export default class discordSocket extends EventEmitter {
         break;
 
       default:
-        console.log(payload);
+        this.debug('Unhandled payload:\n', payload);
         break;
     }
 
@@ -131,7 +146,7 @@ export default class discordSocket extends EventEmitter {
       setTimeout(() => this.connect(), 2000);
     }
 
-    console.log('reason:', reason);
+    console.log('reason:', reason.length > 0 ? reason : 'Unknown');
   }
 
   setHeartbeatTimer(time: number) {
@@ -151,7 +166,7 @@ export default class discordSocket extends EventEmitter {
     }
 
     this.lastHeartbeatAcked = false;
-    this.sendPayload({ op: 1, d: null });
+    this.sendPayload({ op: 1, d: this.sequence }, true);
   }
 
   sendPayload(data: DiscordPayload, important = false) {
@@ -164,7 +179,13 @@ export default class discordSocket extends EventEmitter {
     this._socket!.send(payload);
   }
 
+  identify() {
+    this.sessionID ? this.resume() : this.identifyNew();
+  }
+
   resume() {
+    this.debug('Resuming... with: ', this.sessionID, ' and ', this.sequence);
+
     this.sendPayload(
       {
         op: Opcodes.RESUME,
@@ -178,7 +199,7 @@ export default class discordSocket extends EventEmitter {
     );
   }
 
-  identify() {
+  identifyNew() {
     this.sendPayload(
       {
         op: 2,
@@ -209,6 +230,13 @@ export default class discordSocket extends EventEmitter {
         this._socket.close(code);
       } catch {}
     }
+
+    this.ratelimit.remaining = this.ratelimit.total;
+    this.ratelimit.queue.length = 0;
+    if (this.ratelimit.timer) {
+      clearTimeout(this.ratelimit.timer);
+      this.ratelimit.timer = null;
+    }
   }
 
   private _cleanupConnection() {
@@ -218,13 +246,19 @@ export default class discordSocket extends EventEmitter {
   private async handelT(ev: DiscordPayload) {
     switch (ev.t) {
       case 'READY': {
-        this.sessionID = ev.s;
+        this.sessionID = ev.d.session_id;
         this.me = ev.d.user;
         this.ready = true;
         this.setPresence();
 
         for (const guild of ev.d.guilds) this.guilds.set(guild.id, new Guild(this, guild));
+        this.lastHeartbeatAcked = true;
         console.log('discord client ready');
+        break;
+      }
+
+      case 'RESUMED': {
+        this.sendHeartbeat();
         break;
       }
 
@@ -257,7 +291,7 @@ export default class discordSocket extends EventEmitter {
 
         const newMember = new GuildMember(this, ev.d, guild);
 
-        if (newMember.permissions !== member.permissions) {
+        if (newMember.permissions.toString() !== member.permissions.toString()) {
           /**
            * Emited when member permissions are updated
            * Never emited for a server owner, as they have top permissions level forever :eyes:
@@ -332,6 +366,19 @@ export default class discordSocket extends EventEmitter {
         break;
       }
 
+      // Events to just ignore
+      case 'THREAD_CREATE':
+      case 'THREAD_DELETE':
+      case 'THREAD_UPDATE':
+      case 'CHANNEL_CREATE':
+      case 'CHANNEL_DELETE':
+      case 'CHANNEL_UPDATE':
+      case 'THREAD_LIST_SYNC':
+      case 'STAGE_INSTANCE_CREATE':
+      case 'STAGE_INSTANCE_DELETE':
+      case 'CHANNEL_PINS_UPDATE':
+      case 'THREAD_MEMBER_UPDATE':
+      case 'THREAD_MEMBERS_UPDATE':
       case 'APPLICATION_COMMAND_CREATE':
       case 'APPLICATION_COMMAND_DELETE':
       case 'APPLICATION_COMMAND_UPDATE':
@@ -340,7 +387,7 @@ export default class discordSocket extends EventEmitter {
         break;
 
       default:
-        console.log('Unhandled:\n', ev);
+        this.debug('Unhandled Event:\n', ev);
         break;
     }
   }
@@ -377,6 +424,11 @@ export default class discordSocket extends EventEmitter {
       this._send(item);
       this.ratelimit.remaining--;
     }
+  }
+
+  debug(...message: any[]) {
+    if (PRODUCTION) return;
+    console.log(...message);
   }
 
   incrementMaxListeners() {

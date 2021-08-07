@@ -89,7 +89,7 @@ export default class Guild {
       banner: this.banner,
       mfa_level: this.mfaLevel,
       nfsw: this.nsfw,
-      roles: this.roles.toArray(),
+      // roles: this.roles.toArray(),
     };
   }
 
