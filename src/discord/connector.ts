@@ -28,6 +28,7 @@ export default class discordSocket extends EventEmitter {
   api = new Api(TOKEN);
   me: null | discordUser = null;
   ready = false;
+  gatewayURL?: string;
   /**
    * https://github.com/discordjs/discord.js
    * Gateway ratelimiting used form discord.js
@@ -58,7 +59,8 @@ export default class discordSocket extends EventEmitter {
 
   async connect() {
     this.reconnectTrys += 1;
-    const ws = (this._socket = new websocket(await this.api.getGateway()));
+    const url = this.gatewayURL ?? (this.gatewayURL = await this.api.getGateway());
+    const ws = (this._socket = new websocket(url));
 
     ws.onmessage = this.handleMessage.bind(this);
     ws.onclose = this.handlerClose.bind(this);
@@ -77,11 +79,10 @@ export default class discordSocket extends EventEmitter {
     }
 
     this.debug(`Payload resived:
-    Event: ${payload.t ?? 'None'}
-    Sequence: ${this.sequence}
-    Reconnects: ${this.reconnectTrys}
-    Guilds: ${this.guilds.size}
-    `);
+  Event: ${payload.t ?? 'None'}
+  Sequence: ${this.sequence}
+  Reconnects: ${this.reconnectTrys}
+  Guilds: ${this.guilds.size}`);
 
     switch (payload.op) {
       case Opcodes.HELLO:
@@ -92,10 +93,12 @@ export default class discordSocket extends EventEmitter {
         break;
 
       case Opcodes.INVALID_SESSION:
-        this.debug('Invalid session :sweting:');
+        this.debug(`[INVALID SESSION] Resuming: ${payload.d}.`);
 
-        this.debug('Identifying...');
-        this.identify();
+        if (payload.d) {
+          this.debug('Identifying...');
+          this.resume();
+        }
 
         this.sequence = -1;
         this.sessionID = null;
@@ -113,6 +116,7 @@ export default class discordSocket extends EventEmitter {
         break;
 
       case Opcodes.RECONNECT:
+        this.debug('[RECONNECT] Discord asked us to reconnect');
         this.destroy({ code: 4000 });
         break;
 
@@ -128,10 +132,6 @@ export default class discordSocket extends EventEmitter {
     const error = event?.error ?? event;
     if (!error) return;
 
-    if (this.reconnectTrys < 20) {
-      setTimeout(() => this.connect(), 2000);
-    }
-
     console.log('error:', error);
   }
 
@@ -142,11 +142,15 @@ export default class discordSocket extends EventEmitter {
     // If we still have a connection object, clean up its listeners
     if (this._socket) this._cleanupConnection();
 
-    if (this.reconnectTrys < 20) {
-      setTimeout(() => this.connect(), 2000);
+    if (this.reconnectTrys < 100) {
+      if (this.sessionID) {
+        this.debug('[DISCORD_DISCONNECT?] SessionID is pressent attempting reconnect');
+        this.connect();
+      } else {
+        this.destroy({ rest: true });
+        this.connect();
+      }
     }
-
-    console.log('reason:', reason.length > 0 ? reason : 'Unknown');
   }
 
   setHeartbeatTimer(time: number) {
@@ -184,16 +188,23 @@ export default class discordSocket extends EventEmitter {
   }
 
   resume() {
+    if (!this.sessionID) {
+      this.debug('[RESUME] no session id prescient. starting new session');
+      this.identifyNew();
+      return;
+    }
     this.debug('Resuming... with: ', this.sessionID, ' and ', this.sequence);
+
+    const data = {
+      token: TOKEN,
+      session_id: this.sessionID,
+      seq: this.sequence,
+    };
 
     this.sendPayload(
       {
         op: Opcodes.RESUME,
-        d: {
-          token: TOKEN,
-          session_id: this.sessionID,
-          seq: this.sequence,
-        },
+        d: data,
       },
       true
     );
@@ -217,7 +228,7 @@ export default class discordSocket extends EventEmitter {
     );
   }
 
-  destroy({ code = 1000 } = {}) {
+  destroy({ code = 1000, rest = false } = {}) {
     this.setHeartbeatTimer(-1);
     if (this._socket) {
       if (this._socket.readyState === 1) {
@@ -229,6 +240,11 @@ export default class discordSocket extends EventEmitter {
       try {
         this._socket.close(code);
       } catch {}
+    }
+
+    if (rest) {
+      this.sequence = -1;
+      this.sessionID = null;
     }
 
     this.ratelimit.remaining = this.ratelimit.total;
@@ -253,11 +269,13 @@ export default class discordSocket extends EventEmitter {
 
         for (const guild of ev.d.guilds) this.guilds.set(guild.id, new Guild(this, guild));
         this.lastHeartbeatAcked = true;
+        this.sendHeartbeat();
         console.log('discord client ready');
         break;
       }
 
       case 'RESUMED': {
+        this.lastHeartbeatAcked = true;
         this.sendHeartbeat();
         break;
       }
@@ -403,7 +421,7 @@ export default class discordSocket extends EventEmitter {
             type: 3,
           },
         ],
-        status: data?.status || this.reconnectTrys >= 15 ? 'dnd' : 'online',
+        status: data?.status || this.reconnectTrys >= 30 ? 'dnd' : 'online',
         afk: !!data?.afk,
       },
     });
