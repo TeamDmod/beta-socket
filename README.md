@@ -72,27 +72,6 @@
 - DESCONNECT_GUILD -> Stop getting data form that guild
   > Note: Only one guild connection allowed if any other is attempted it will remove the previous
 
-```json
-{
-  "op": 6,
-  "cmd": "CONNECT_GUILD",
-  "d": {
-    "token": "q937ue0hw09fyhe.0s98fhs98d0h", // an application hash token for this guild
-    "gid": "123467"
-  }
-}
-```
-
-```json
-{
-  "op": 6,
-  "cmd": "DESCONNECT_GUILD",
-  "d": {
-    "gid": "123467"
-  }
-}
-```
-
 7 => cmd responce
 
 ```json
@@ -133,7 +112,85 @@
 }
 ```
 
+# Commands
+
+"CONNECT_GUILD" -> Connect to a guild application
+
+```json
+{
+  "op": 6,
+  "cmd": "CONNECT_GUILD",
+  "d": {
+    "token": "q937ue0hw09fyhe.0s98fhs98d0h", // an guild application hash
+    "gid": "123467"
+  }
+}
+```
+
+"DESCONNECT_GUILD" -> Disconnect from a guild application
+
+```json
+{
+  "op": 6,
+  "cmd": "DESCONNECT_GUILD",
+  "d": {
+    "gid": "123467"
+  }
+}
+```
+
+"APPLICATION_SESSION" -> Start a live application session
+
+```json
+{
+  "op": 7,
+  "cmd": "APPLICATION_SESSION",
+  "d": {
+    "uid": "000", // user id
+    "gid": "0001", // guild id
+    "utokh": "", // user token hash
+    "uhash": "" // user gateway hash
+  }
+}
+```
+
+"APPLICATION_SESSION_END" -> End the application session
+
+```json
+{
+  "op": 7,
+  "cmd": "APPLICATION_SESSION_END",
+  "d": {
+    "gid": "0001"
+  }
+}
+```
+
+"APPLICATION_SESSION_REAUTH" -> When the application session requests you to reauth command name, packet ->
+
+```json
+{
+  "op": 7,
+  "cmd": "APPLICATION_SESSION_REAUTH",
+  "d": {
+    "utokh": "", // user token hash
+    "uhash": "", // user gateway hash
+    "pm": "64" // past permissions of this member
+  }
+}
+```
+
+"APPLICATION_SESSION_HB_M" => Send back heartbeat
+
 # Events
+
+None discord;
+
+Event name | Info
+
+APPLICATION_SESSION_HB_P => Session heartbeat
+
+APPLICATION_SESSION_END => When a application session is ended
 
 Discord event name | Event name | Info
 
@@ -147,6 +204,7 @@ GUILD_MEMBER_UPDATE ->
 
 - [x] Authentication process
 - [x] Setup a stable discord gateway connection.
+- [ ] Patch application from from session live by command
 - [ ] Start sending/resiving a heartbeat
 
 ©copyright 2021 dmod
