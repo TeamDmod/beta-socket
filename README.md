@@ -1,7 +1,7 @@
 # Operation codes
 
 > "=>" Means a payload going from the server to the client.
-> "<=" Means a payload going from teh client to the server
+> "<=" Means a payload going from the client to the server
 
 0 => request authentication
 
